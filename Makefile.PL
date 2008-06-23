@@ -1,10 +1,8 @@
 use inc::Module::Install;
 
 name		('Module-Install-Substitute');
-abstract	('substitute values into files before install');
-version_from	('lib/Module/Install/Substitute.pm');
-author		('Ruslan U. Zakirov <Ruslan.Zakirov@gmail.com>');
 license		('perl');
+all_from	('lib/Module/Install/Substitute.pm');
 
 requires('File::Spec');
 requires('File::Temp');

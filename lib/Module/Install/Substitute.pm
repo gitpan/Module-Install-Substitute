@@ -1,12 +1,13 @@
 package Module::Install::Substitute;
 
-use vars qw(@ISA);
-use Module::Install::Base; @ISA = qw(Module::Install::Base);
-
 use strict;
 use warnings;
+use 5.008; # I don't care much about earlier versions
 
-$Module::Install::Substitute::VERSION = '0.02';
+use Module::Install::Base;
+our @ISA = qw(Module::Install::Base);
+
+our $VERSION = '0.03';
 
 require File::Temp;
 require File::Spec;
@@ -14,20 +15,22 @@ require Cwd;
 
 =head1 NAME
 
-  Module::Install::Substitute - substitute values into files before install
+Module::Install::Substitute - substitute values into files before install
 
 =head1 SYNOPSIS
 
-  use inc::Module::Install;
+    ... Makefile.PL ...
+    substitute(
+      {
+        LESS => '/usr/bin/less',
+        APXS => '/usr/bin/apxs2',
+      },
+      'bin/my-app'
+    );
 
-  ...
-  substitute(
-    {
-      LESS => '/usr/bin/less',
-      APXS => '/usr/bin/apxs2',
-    },
-    'bin/my-app'
-  );
+    ... bin/my-app ...
+    ### after: my $less_path = '@LESS@';
+    my $less_path = '/usr/bin/less';
 
 =head1 DESCRIPTION
 
@@ -36,10 +39,12 @@ values into files before install, for example paths to libs or binary executable
 
 =head1 METHODS
 
-=head2 substitute SUBSTITUTIONS [OPTIONS] FILES
+=head2 substitute {SUBSTITUTIONS} [{OPTIONS}] @FILES
 
-Takes has reference with substituations key value pairs, optional
-options hash reference and list of files to deal with.
+Takes a hash reference with substituations key value pairs, an optional hash
+reference with options and a list of files to deal with.
+
+=head3 Options
 
 Several options are available:
 
@@ -53,13 +58,33 @@ that you don't need to specify sufixes in the list of files.
 
 =item from
 
-Source base dir.
+Source base dir. By default it's the current working directory (L<Cwd>). All
+files in the list are treated as relative to this directory.
 
 =item to
 
-Destination base dir.
+Destination base dir. By default it's the current working directory (L<Cwd>).
 
 =back
+
+=head3 File format
+
+In the files the following constructs are replaced:
+    
+    ###\s*after:\s?some string with @KEY@
+    some string with @KEY@
+
+    some string with value
+    ###\s*before:\s?some string with @KEY@
+
+    ###\s*replace:\s?some string with @KEY@
+
+So string should start with three # characters followed by optional spaces,
+action keyword and some string where @SOME_KEY@ are substituted.
+
+This module can replace lines after or before above constructs based on
+action keyword to allow you to change files in place without moving them
+around and to make it possible to run substitution multiple times.
 
 =cut
 
@@ -142,11 +167,12 @@ sub __process_streams
 	my $re_subst = join('|', map {"\Q$_"} keys %{ $subst } );
 
 	while( my $str = <$in> ) {
-		if( $str =~ /^###\s*(before|replace|after)\: ?(.*)$/s ) {
+		if( $str =~ /^###\s*(before|replace|after)\:\s?(.*)$/s ) {
 			my ($action, $nstr) = ($1,$2);
 			$nstr =~ s/\@($re_subst)\@/$subst->{$1}/ge;
 
-			$action = 'before' if !$replace && $action eq 'replace';
+			die "Replace action is bad idea for situations when dest is equal to source"
+                if $replace && $action eq 'replace';
 			if( $action eq 'before' ) {
 				die "no line before 'before' action" unless @queue;
 				# overwrite prev line;
@@ -174,3 +200,9 @@ sub __process_streams
 }
 
 1;
+
+=head1 AUTHOR
+
+Ruslan Zakirov E<lt>ruz@cpan.orgE<gt>
+
+=head1
